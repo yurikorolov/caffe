@@ -127,26 +127,6 @@ void DetectionOutputLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void DetectionOutputLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  if (need_save_) {
-    CHECK_LE(name_count_, names_.size());
-    if (name_count_ % num_test_image_ == 0) {
-      // Clean all outputs.
-      if (output_format_ == "VOC") {
-        boost::filesystem::path output_directory(output_directory_);
-        for (map<int, string>::iterator it = label_to_name_.begin();
-             it != label_to_name_.end(); ++it) {
-          if (it->first == background_label_id_) {
-            continue;
-          }
-          std::ofstream outfile;
-          boost::filesystem::path file(
-              output_name_prefix_ + it->second + ".txt");
-          boost::filesystem::path out_file = output_directory / file;
-          outfile.open(out_file.string().c_str(), std::ofstream::out);
-        }
-      }
-    }
-  }
   CHECK_EQ(bottom[0]->num(), bottom[1]->num());
   if (bbox_preds_.num() != bottom[0]->num() ||
       bbox_preds_.count(1) != bottom[0]->count(1)) {
@@ -322,11 +302,6 @@ void DetectionOutputLayer<Dtype>::Forward_cpu(
       const vector<NormalizedBBox>& bboxes =
           decode_bboxes.find(loc_label)->second;
       vector<int>& indices = it->second;
-      if (need_save_) {
-        CHECK(label_to_name_.find(label) != label_to_name_.end())
-          << "Cannot find label: " << label << " in the label map.";
-        CHECK_LT(name_count_, names_.size());
-      }
       for (int j = 0; j < indices.size(); ++j) {
         int idx = indices[j];
         top_data[count * 7] = i;
@@ -373,7 +348,7 @@ void DetectionOutputLayer<Dtype>::Forward_cpu(
         ++count;
       }
     }
-    if (need_save_) {
+    /*    if (need_save_) {
       ++name_count_;
       if (name_count_ % num_test_image_ == 0) {
         if (output_format_ == "VOC") {
@@ -459,7 +434,7 @@ void DetectionOutputLayer<Dtype>::Forward_cpu(
         name_count_ = 0;
         detections_.clear();
       }
-    }
+      }*/
   }
   if (visualize_) {
 #ifdef USE_OPENCV

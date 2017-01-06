@@ -105,7 +105,7 @@ void DetectionOutputLayer<Dtype>::Forward_gpu(
     }
   }
 
-  vector<int> top_shape(2, 1);
+  vector<int> top_shape((size_t)2, 1);
   top_shape.push_back(num_kept);
   top_shape.push_back(7);
   Dtype* top_data;
@@ -198,93 +198,6 @@ void DetectionOutputLayer<Dtype>::Forward_gpu(
           detections_.push_back(std::make_pair("", cur_det));
         }
         ++count;
-      }
-    }
-    if (need_save_) {
-      ++name_count_;
-      if (name_count_ % num_test_image_ == 0) {
-        if (output_format_ == "VOC") {
-          map<string, std::ofstream*> outfiles;
-          for (int c = 0; c < num_classes_; ++c) {
-            if (c == background_label_id_) {
-              continue;
-            }
-            string label_name = label_to_name_[c];
-            boost::filesystem::path file(
-                output_name_prefix_ + label_name + ".txt");
-            boost::filesystem::path out_file = output_directory / file;
-            outfiles[label_name] = new std::ofstream(out_file.string().c_str(),
-                std::ofstream::out);
-          }
-          BOOST_FOREACH(ptree::value_type &det, detections_.get_child("")) {
-            ptree pt = det.second;
-            string label_name = pt.get<string>("category_id");
-            if (outfiles.find(label_name) == outfiles.end()) {
-              std::cout << "Cannot find " << label_name << std::endl;
-              continue;
-            }
-            string image_name = pt.get<string>("image_id");
-            float score = pt.get<float>("score");
-            vector<int> bbox;
-            BOOST_FOREACH(ptree::value_type &elem, pt.get_child("bbox")) {
-              bbox.push_back(static_cast<int>(elem.second.get_value<float>()));
-            }
-            *(outfiles[label_name]) << image_name;
-            *(outfiles[label_name]) << " " << score;
-            *(outfiles[label_name]) << " " << bbox[0] << " " << bbox[1];
-            *(outfiles[label_name]) << " " << bbox[0] + bbox[2];
-            *(outfiles[label_name]) << " " << bbox[1] + bbox[3];
-            *(outfiles[label_name]) << std::endl;
-          }
-          for (int c = 0; c < num_classes_; ++c) {
-            if (c == background_label_id_) {
-              continue;
-            }
-            string label_name = label_to_name_[c];
-            outfiles[label_name]->flush();
-            outfiles[label_name]->close();
-            delete outfiles[label_name];
-          }
-        } else if (output_format_ == "COCO") {
-          boost::filesystem::path output_directory(output_directory_);
-          boost::filesystem::path file(output_name_prefix_ + ".json");
-          boost::filesystem::path out_file = output_directory / file;
-          std::ofstream outfile;
-          outfile.open(out_file.string().c_str(), std::ofstream::out);
-
-          boost::regex exp("\"(null|true|false|-?[0-9]+(\\.[0-9]+)?)\"");
-          ptree output;
-          output.add_child("detections", detections_);
-          std::stringstream ss;
-          write_json(ss, output);
-          std::string rv = boost::regex_replace(ss.str(), exp, "$1");
-          outfile << rv.substr(rv.find("["), rv.rfind("]") - rv.find("["))
-              << std::endl << "]" << std::endl;
-        } else if (output_format_ == "ILSVRC") {
-          boost::filesystem::path output_directory(output_directory_);
-          boost::filesystem::path file(output_name_prefix_ + ".txt");
-          boost::filesystem::path out_file = output_directory / file;
-          std::ofstream outfile;
-          outfile.open(out_file.string().c_str(), std::ofstream::out);
-
-          BOOST_FOREACH(ptree::value_type &det, detections_.get_child("")) {
-            ptree pt = det.second;
-            int label = pt.get<int>("category_id");
-            string image_name = pt.get<string>("image_id");
-            float score = pt.get<float>("score");
-            vector<int> bbox;
-            BOOST_FOREACH(ptree::value_type &elem, pt.get_child("bbox")) {
-              bbox.push_back(static_cast<int>(elem.second.get_value<float>()));
-            }
-            outfile << image_name << " " << label << " " << score;
-            outfile << " " << bbox[0] << " " << bbox[1];
-            outfile << " " << bbox[0] + bbox[2];
-            outfile << " " << bbox[1] + bbox[3];
-            outfile << std::endl;
-          }
-        }
-        name_count_ = 0;
-        detections_.clear();
       }
     }
   }
