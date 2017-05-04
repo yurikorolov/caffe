@@ -10,5 +10,6 @@ Improvements and new features include:
 - Sparse inputs and CPU/GPU computations
 - Support for class weights applied to Softmax loss, useful for training over imbalanced datasets
 - SSD: Single Shot MultiBox Detector for object detection in images
+- Segnet: segmentation in images from https://github.com/alexgkendall/caffe-segnet and https://github.com/TimoSaemann/caffe-segnet-cudnn5
 
 While this is intended to be used with DeepDetect, this is a great alternative to the original Caffe if you'd like to avoid uncaptured errors, train from text or sparse data, need built-in image detection.

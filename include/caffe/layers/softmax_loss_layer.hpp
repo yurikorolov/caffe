@@ -64,6 +64,7 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
   virtual inline int MaxTopBlobs() const { return 2; }
 
  protected:
+  /// @copydoc SoftmaxWithLossLayer
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
@@ -112,9 +113,13 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
   bool has_ignore_label_;
   /// The label indicating that an instance should be ignored.
   int ignore_label_;
+  /// Whether to weight labels by their batch frequencies when calculating
+  /// the loss
+  bool weight_by_label_freqs_;
+  Blob<float> label_counts_;
   /// How to normalize the output loss.
   LossParameter_NormalizationMode normalization_;
-
+  
   int softmax_axis_, outer_num_, inner_num_;
 };
 
