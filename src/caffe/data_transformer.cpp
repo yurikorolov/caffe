@@ -22,7 +22,9 @@ DataTransformer<Dtype>::DataTransformer(const TransformationParameter& param,
     CHECK_EQ(param_.mean_value_size(), 0) <<
       "Cannot specify mean_file and mean_value at the same time";
     const string& mean_file = param.mean_file();
-    LOG(INFO) << "Loading mean file from: " << mean_file;
+    if (Caffe::root_solver()) {
+      LOG(INFO) << "Loading mean file from: " << mean_file;
+    }
     BlobProto blob_proto;
     ReadProtoFromBinaryFileOrDie(mean_file.c_str(), &blob_proto);
     data_mean_.FromProto(blob_proto);
@@ -156,7 +158,7 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
   // If datum is encoded, decoded and transform the cv::image.
   if (datum.encoded()) {
 #ifdef USE_OPENCV
-    CHECK(!param_.force_color() && !param_.force_gray())
+    CHECK(!(param_.force_color() && param_.force_gray()))
         << "cannot set both force_color and force_gray";
     cv::Mat cv_img;
     if (param_.force_color() || param_.force_gray()) {
@@ -1038,7 +1040,7 @@ template<typename Dtype>
 vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum) {
   if (datum.encoded()) {
 #ifdef USE_OPENCV
-    CHECK(!param_.force_color() && !param_.force_gray())
+    CHECK(!(param_.force_color() && param_.force_gray()))
         << "cannot set both force_color and force_gray";
     cv::Mat cv_img;
     if (param_.force_color() || param_.force_gray()) {
@@ -1105,6 +1107,7 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(
   return shape;
 }
 
+#ifdef USE_OPENCV
 template<typename Dtype>
 vector<int> DataTransformer<Dtype>::InferBlobShape(const cv::Mat& cv_img) {
   const int crop_size = param_.crop_size();
@@ -1134,7 +1137,8 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const cv::Mat& cv_img) {
   shape[3] = (crop_w)? crop_w: img_width;
   return shape;
 }
-
+#endif // USE_OPENCV
+ 
 template<typename Dtype>
 vector<int> DataTransformer<Dtype>::InferBlobShape(
     const vector<cv::Mat> & mat_vector) {
