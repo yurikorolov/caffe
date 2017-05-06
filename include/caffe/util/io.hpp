@@ -263,7 +263,8 @@ cv::Mat ReadImageToCVMat(const string& filename,
 			 const bool nearest_neighbour_interp = false);
 
 cv::Mat ReadImageToCVMat(const string& filename,
-			 const int height, const int width, const bool is_color);
+			 const int height, const int width, const bool is_color, 
+			 const bool nearest_neighbour_interp = false);
 
 cv::Mat ReadImageToCVMat(const string& filename,
     const int height, const int width);

@@ -128,13 +128,14 @@ cv::Mat ReadImageToCVMat(const string& filename, const int height,
 }
 
 cv::Mat ReadImageToCVMat(const string& filename,
-    const int height, const int width, const bool is_color) {
-  return ReadImageToCVMat(filename, height, width, 0, 0, is_color, false);
+			 const int height, const int width, const bool is_color, 
+			 const bool nearest_neighbour_interp) {
+  return ReadImageToCVMat(filename, height, width, 0, 0, is_color, nearest_neighbour_interp);
 }
 
 cv::Mat ReadImageToCVMat(const string& filename,
     const int height, const int width) {
-  return ReadImageToCVMat(filename, height, width, true);
+  return ReadImageToCVMat(filename, height, width, true, false);
 }
 
 cv::Mat ReadImageToCVMat(const string& filename,
