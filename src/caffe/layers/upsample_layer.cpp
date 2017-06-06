@@ -56,7 +56,11 @@ void UpsampleLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       << "corresponding to (num, channels, height, width)";
   CHECK_EQ(bottom[0]->num(), bottom[1]->num());
   CHECK_EQ(bottom[0]->channels(), bottom[1]->channels());
-  CHECK_EQ(bottom[0]->height(), bottom[1]->height());
+  if (bottom[0]->height() != bottom[1]->height())
+    {
+      LOG(ERROR) << "bottom[0]->height()=" << bottom[0]->height() << " / bottom[1]->height()=" << bottom[1]->height();
+      CHECK_EQ(bottom[0]->height(), bottom[1]->height());
+    }
   CHECK_EQ(bottom[0]->width(), bottom[1]->width());
 
   if (upsample_h_ <= 0 || upsample_w_ <= 0) {

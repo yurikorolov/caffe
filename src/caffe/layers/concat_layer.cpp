@@ -39,8 +39,12 @@ void ConcatLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
         << "All inputs must have the same #axes.";
     for (int j = 0; j < num_axes; ++j) {
       if (j == concat_axis_) { continue; }
-      CHECK_EQ(top_shape[j], bottom[i]->shape(j))
-          << "All inputs must have the same shape, except at concat_axis.";
+      if (top_shape[j] != bottom[i]->shape(j))
+	{
+	  LOG(ERROR) << "j=" << j << " / top_shape[j]=" << top_shape[j] << " / bottom[i]->shape(j)=" << bottom[i]->shape(j);
+	  CHECK_EQ(top_shape[j], bottom[i]->shape(j))
+	    << "All inputs must have the same shape, except at concat_axis.";
+	}
     }
     bottom_count_sum += bottom[i]->count();
     top_shape[concat_axis_] += bottom[i]->shape(concat_axis_);
