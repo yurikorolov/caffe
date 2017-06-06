@@ -5,22 +5,6 @@
 #include <utility>
 #include <vector>
 
-/*#include "boost/scoped_ptr.hpp"
-#include "hdf5.h"
-
-#include "caffe/blob.hpp"
-#include "caffe/layer.hpp"
-#include "caffe/proto/caffe.pb.h"
-#include "caffe/common.hpp"
-#include "caffe/filler.hpp"
-#include "caffe/syncedmem.hpp"
-#include "caffe/internal_thread.hpp"
-#include "caffe/util/math_functions.hpp"
-#include "caffe/util/benchmark.hpp"
-#include "caffe/util/io.hpp"
-#include "caffe/util/rng.hpp"
-#include "caffe/data_transformer.hpp"*/
-
 #include "caffe/blob.hpp"
 #include "caffe/data_transformer.hpp"
 #include "caffe/internal_thread.hpp"
@@ -48,7 +32,6 @@ class DenseImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
  protected:
   shared_ptr<Caffe::RNG> prefetch_rng_;
   virtual void ShuffleImages();
-  //virtual void InternalThreadEntry();
   virtual void load_batch(Batch<Dtype>* batch);
 
   vector<std::pair<std::string, std::string> > lines_;
