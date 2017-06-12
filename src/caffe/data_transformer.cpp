@@ -647,12 +647,12 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
   } else {
     cv_resized_image = cv_img;
   }
-  if (param_.has_distort_param()) { //TODO: not for annotated datum, since labels do change in that case (taken care of from within data layer)
+  if (param_.has_distort_param() && !preserve_pixel_vals) { //TODO: not for annotated datum, since labels do change in that case (taken care of from within data layer)
     cv_distort_image = ApplyDistort(cv_resized_image, param_.distort_param());
   } else {
     cv_distort_image = cv_resized_image;
   }
-  if (param_.has_noise_param()) {
+  if (param_.has_noise_param() && !preserve_pixel_vals) {
     cv_noised_image = ApplyNoise(cv_distort_image, param_.noise_param());
   } else {
     cv_noised_image = cv_distort_image;
