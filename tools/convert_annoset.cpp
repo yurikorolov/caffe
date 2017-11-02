@@ -134,6 +134,7 @@ int main(int argc, char** argv) {
   db->Open(argv[3], db::NEW);
   scoped_ptr<db::Transaction> txn(db->NewTransaction());
 
+  
   // Storing to db
   std::string root_folder(argv[1]);
   AnnotatedDatum anno_datum;

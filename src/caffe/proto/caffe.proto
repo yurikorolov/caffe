@@ -445,7 +445,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 156 (last added: focal_loss_parm)
+// LayerParameter next available layer-specific ID: 157 (last added: margin_inner_product_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -550,6 +550,7 @@ message LayerParameter {
   optional SmoothL1LossParameter smooth_l1_loss_param = 148;
   optional SoftmaxParameter softmax_param = 125;
   optional FocalLossParameter focal_loss_param = 156;
+  optional MarginInnerProductParameter margin_inner_product_param = 157;
   optional SPPParameter spp_param = 132;
   optional SliceParameter slice_param = 126;
   optional TanHParameter tanh_param = 127;
@@ -2069,6 +2070,28 @@ message PReLUParameter {
   optional FillerParameter filler = 1;
   // Whether or not slope parameters are shared across channels.
   optional bool channel_shared = 2 [default = false];
+}
+
+message MarginInnerProductParameter {
+  optional uint32 num_output = 1; // The number of outputs for the layer
+  enum MarginType {
+    SINGLE = 0;
+    DOUBLE = 1;
+    TRIPLE = 2;
+    QUADRUPLE = 3;
+  }
+  optional MarginType type = 2 [default = SINGLE];
+  optional FillerParameter weight_filler = 3; // The filler for the weight
+
+  // The first axis to be lumped into a single inner product computation;
+  // all preceding axes are retained in the output.
+  // May be negative to index from the end (e.g., -1 for the last axis).
+  optional int32 axis = 4 [default = 1];
+  optional float base = 5 [default = 1];
+  optional float gamma = 6 [default = 0];
+  optional float power = 7 [default = 1];
+  optional int32 iteration = 8 [default = 0];
+  optional float lambda_min = 9 [default = 0];
 }
 
 message ShuffleChannelParameter {
