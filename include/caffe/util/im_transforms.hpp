@@ -64,6 +64,11 @@ cv::Mat ApplyGeometry(const cv::Mat& in_img,  const GeometryParameter& param);
 void ApplyGeometry(const cv::Mat& in_img, cv::Mat& out_img,
                       const cv::Mat& in_lbl, cv::Mat& out_lbl,
                       const GeometryParameter& param);
+void ApplyGeometry(const cv::Mat& in_img, cv::Mat& out_img,
+                   const AnnotatedDatum& anno_datum,
+                   AnnotatedDatum& geom_anno_datum,
+                   const GeometryParameter& param);
+
 
 
 void ApplyZoom(const cv::Mat& in_img, cv::Mat& out_img,

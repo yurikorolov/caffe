@@ -324,8 +324,8 @@ void DataTransformer<Dtype>::TransformAnnotation(
           continue;
         }
         NormalizedBBox proj_bbox;
-	if (!do_crop)
-	  proj_bbox = resize_bbox;
+        if (!do_crop)
+          proj_bbox = resize_bbox;
         if (!do_crop || ProjectBBox(crop_bbox, resize_bbox, &proj_bbox)) {
           has_valid_annotation = true;
           Annotation* transformed_anno =
@@ -342,13 +342,13 @@ void DataTransformer<Dtype>::TransformAnnotation(
             ExtrapolateBBox(param_.resize_param(), img_height, img_width,
                 crop_bbox, transformed_bbox);
           }
-	  // apply rotation to bbox
-	  if (rangle != 0)
-	    {
-	      NormalizedBBox src_bbox(*transformed_bbox);
-	      RotateBBox(rangle, src_bbox, transformed_bbox);
-	    }
-	}
+          // apply rotation to bbox
+          if (rangle != 0)
+            {
+              NormalizedBBox src_bbox(*transformed_bbox);
+              RotateBBox(rangle, src_bbox, transformed_bbox);
+            }
+        }
       }
       // Save for output.
       if (has_valid_annotation) {
@@ -641,6 +641,72 @@ void DataTransformer<Dtype>::RotateImage(const Datum& datum,
     }
   }
 }
+
+
+template<typename Dtype>
+void DataTransformer<Dtype>::GeometryImage(const AnnotatedDatum& anno_datum,
+                                           AnnotatedDatum* geometry_anno_datum) {
+  
+  
+  const Datum datum = anno_datum.datum();
+  // If datum is encoded, decode and geom the cv::image.
+  if (datum.encoded()) {
+#ifdef USE_OPENCV
+    CHECK(!(param_.force_color() && param_.force_gray()))
+      << "cannot set both force_color and force_gray";
+    cv::Mat cv_img;
+    if (param_.force_color() || param_.force_gray()) {
+      // If force_color then decode in color otherwise decode in gray.
+      cv_img = DecodeDatumToCVMat(datum, param_.force_color());
+    } else {
+      cv_img = DecodeDatumToCVMatNative(datum);
+    }
+    cv::Mat geom_img;
+    ApplyGeometry(cv_img, geom_img,
+                  anno_datum,
+                  *geometry_anno_datum,
+                  param_.geometry_param());
+    // below dump images + bboxes for check
+    // for (int g = 0; g < anno_datum.annotation_group_size(); ++g)
+    //   {
+    //     const AnnotationGroup& anno_group = anno_datum.annotation_group(g);
+    //     for (int a = 0; a < anno_group.annotation_size(); ++a) {
+    //       const Annotation& anno = anno_group.annotation(a);
+    //       NormalizedBBox bbox = anno.bbox();
+    //       cv::line(cv_img, cv::Point(bbox.xmin()*cv_img.cols,bbox.ymin()*cv_img.rows), cv::Point(bbox.xmax()*cv_img.cols,bbox.ymin()*cv_img.rows), CV_RGB(255,0,0),2);
+    //       cv::line(cv_img, cv::Point(bbox.xmin()*cv_img.cols,bbox.ymin()*cv_img.rows), cv::Point(bbox.xmin()*cv_img.cols,bbox.ymax()*cv_img.rows), CV_RGB(255,0,0),2);
+    //       cv::line(cv_img, cv::Point(bbox.xmin()*cv_img.cols,bbox.ymax()*cv_img.rows), cv::Point(bbox.xmax()*cv_img.cols,bbox.ymax()*cv_img.rows), CV_RGB(255,0,0),2);
+    //       cv::line(cv_img, cv::Point(bbox.xmax()*cv_img.cols,bbox.ymin()*cv_img.rows), cv::Point(bbox.xmax()*cv_img.cols,bbox.ymax()*cv_img.rows), CV_RGB(255,0,0),2);
+    //     }
+    //   }
+    // for (int g = 0; g < geometry_anno_datum->annotation_group_size(); ++g)
+    //   {
+    //     const AnnotationGroup& anno_group = geometry_anno_datum->annotation_group(g);
+    //     for (int a = 0; a < anno_group.annotation_size(); ++a) {
+    //       const Annotation& anno = anno_group.annotation(a);
+    //       NormalizedBBox bbox = anno.bbox();
+    //       cv::line(geom_img, cv::Point(bbox.xmin()*cv_img.cols,bbox.ymin()*cv_img.rows), cv::Point(bbox.xmax()*cv_img.cols,bbox.ymin()*cv_img.rows), CV_RGB(255,0,0),2);
+    //       cv::line(geom_img, cv::Point(bbox.xmin()*cv_img.cols,bbox.ymin()*cv_img.rows), cv::Point(bbox.xmin()*cv_img.cols,bbox.ymax()*cv_img.rows), CV_RGB(255,0,0),2);
+    //       cv::line(geom_img, cv::Point(bbox.xmin()*cv_img.cols,bbox.ymax()*cv_img.rows), cv::Point(bbox.xmax()*cv_img.cols,bbox.ymax()*cv_img.rows), CV_RGB(255,0,0),2);
+    //       cv::line(geom_img, cv::Point(bbox.xmax()*cv_img.cols,bbox.ymin()*cv_img.rows), cv::Point(bbox.xmax()*cv_img.cols,bbox.ymax()*cv_img.rows), CV_RGB(255,0,0),2);
+    //     }
+    //   }
+    // cv::imwrite("/tmp/cv.jpg", cv_img);
+    // cv::imwrite("/tmp/geom.jpg", geom_img);
+
+    EncodeCVMatToDatum(geom_img, "jpg", geometry_anno_datum->mutable_datum());
+    return;
+#else
+    LOG(ERROR) << "Encoded datum requires OpenCV; compile with USE_OPENCV.";
+    LOG(FATAL) << "fatal error";
+#endif  // USE_OPENCV
+  } else {
+    if (param_.force_color() || param_.force_gray()) {
+      LOG(ERROR) << "force_color and force_gray only for encoded datum";
+    }
+  }
+}
+
 
 template<typename Dtype>
 void DataTransformer<Dtype>::RotateImage(const AnnotatedDatum& anno_datum,

@@ -733,7 +733,161 @@ void RandomOrderChannels(const cv::Mat& in_img, cv::Mat* out_img,
   }
 }
 
+void filterBBoxes(std::vector<NormalizedBBox> &bboxes, std::vector<int>& instances)
+{
+  std::vector<NormalizedBBox> filteredBBoxes;
+  std::vector<int> filteredInstances;
+  for (int i = 0; i< bboxes.size(); ++i)
+    {
+      NormalizedBBox bb = bboxes[i];
+      if (bb.xmax() >= 0.0 && bb.xmin() <= 1.0 &&
+          bb.ymax() >= 0.0 && bb.ymin() <= 1.0)
+        {
+          NormalizedBBox nbb;
+          nbb.set_label(bb.label());
+          nbb.set_difficult(bb.difficult());
+          nbb.set_score(bb.score());
+          nbb.set_size(bb.size());
+          nbb.set_xmin(std::max(0.f,bb.xmin()));
+          nbb.set_xmax(std::min(1.f,bb.xmax()));
+          nbb.set_ymin(std::max(0.f,bb.ymin()));
+          nbb.set_ymax(std::min(1.f,bb.ymax()));
+          float surfbb = (bb.xmax()-bb.xmin())*(bb.ymax()-bb.ymin());
+          float surfnbb = (nbb.xmax()-nbb.xmin())*(nbb.ymax()-nbb.ymin());
+          if (surfnbb > 0.75 * surfbb)
+            {
+              filteredBBoxes.push_back(nbb);
+              filteredInstances.push_back(instances[i]);
+            }
+        }
+    }
+  bboxes.clear();
+  bboxes.insert(bboxes.end(), filteredBBoxes.begin(), filteredBBoxes.end());
+  instances.clear();
+  instances.insert(instances.end(), filteredInstances.begin(), filteredInstances.end());
+}
 
+void warpBBoxes(std::vector<NormalizedBBox>& bboxes, cv::Mat warpMat, int rows, int cols)
+{
+  std::vector<NormalizedBBox> newbboxes;
+  for (NormalizedBBox& bb : bboxes)
+    {
+      std::vector<cv::Point2f> origBBox;
+      std::vector<cv::Point2f> warpedBBox;
+      cv::Point2f p1;
+      p1.x = bb.xmin() * cols;
+      p1.y = bb.ymin() * rows;
+      origBBox.push_back(p1);
+      cv::Point2f p2;
+      p2.x = bb.xmax() * cols;
+      p2.y = bb.ymax() * rows;
+      origBBox.push_back(p2);
+      cv::Point2f p3;
+      p3.x = bb.xmin() * cols;
+      p3.y = bb.ymax() * rows;
+      origBBox.push_back(p3);
+      cv::Point2f p4;
+      p4.x = bb.xmax() * cols;
+      p4.y = bb.ymin() * rows;
+      origBBox.push_back(p4);
+      
+      perspectiveTransform(origBBox, warpedBBox, warpMat);
+      
+      float xmin = warpedBBox[0].x;
+      float ymin = warpedBBox[0].y;
+      float xmax = warpedBBox[0].x;
+      float ymax = warpedBBox[0].y;
+      for (int i =1; i<4; ++i)
+        {
+          if (warpedBBox[i].x < xmin)
+            xmin = warpedBBox[i].x;
+          if (warpedBBox[i].x > xmax)
+            xmax = warpedBBox[i].x;
+          if (warpedBBox[i].y < ymin)
+            ymin = warpedBBox[i].y;
+          if (warpedBBox[i].y > ymax)
+            ymax = warpedBBox[i].y;
+        }
+      bb.set_xmin(xmin/cols);
+      bb.set_ymin(ymin/rows);
+      bb.set_xmax(xmax/cols);
+      bb.set_ymax(ymax/rows);
+    }
+}
+
+void mirror_x(NormalizedBBox& bb)
+{
+  float xmin = 1.0-bb.xmax();
+  bb.set_xmax(1.0-bb.xmin());
+  bb.set_xmin(xmin);
+}
+
+void mirror_y(NormalizedBBox& bb)
+{
+  float ymin = 1.0-bb.ymax();
+  bb.set_ymax(1.0-bb.ymin());
+  bb.set_ymin(ymin);
+}
+
+void shift_x(NormalizedBBox& bb,int n)
+{
+  if (n==0)
+    return;
+  bb.set_xmin(((float)n)+bb.xmin());
+  bb.set_xmax(((float)n)+bb.xmax());
+}
+
+void shift_y(NormalizedBBox& bb, int n)
+{
+  if (n==0)
+    return;
+  bb.set_ymin(((float)n)+bb.ymin());
+  bb.set_ymax(((float)n)+bb.ymax());
+}
+
+void getEnlargedBBoxes(int rows, int cols, const GeometryParameter& param, std::vector<NormalizedBBox>& bboxes, std::vector<int>& instances)
+{
+  int imin, imax, jmin, jmax;
+  switch(param.pad_mode())
+    {
+    case GeometryParameter_Pad_mode_CONSTANT:
+    case GeometryParameter_Pad_mode_REPEAT_NEAREST: imin=jmin=1; imax=jmax=2; break;
+    case GeometryParameter_Pad_mode_MIRRORED: imin=jmin=0; imax=jmax=3; break;
+    default:     LOG(ERROR) << "Unknown pad mode.";   LOG(FATAL) << "fatal error"; return;
+    }
+  std::vector<int> newInstances;
+  std::vector<NormalizedBBox> newBBoxes;
+  int ii =0;
+  for (NormalizedBBox b : bboxes)
+    {
+      for (int i =imin; i<imax; ++i) //iterate over x
+        for (int j = jmin; j<jmax; ++j)  // iterate over y
+          {
+            NormalizedBBox bb;
+            bb.set_label(b.label());
+            bb.set_difficult(b.difficult());
+            bb.set_score(b.score());
+            bb.set_size(b.size());
+            bb.set_xmin(b.xmin());
+            bb.set_xmax(b.xmax());
+            bb.set_ymin(b.ymin());
+            bb.set_ymax(b.ymax());
+            if (i ==0 || i == 2)
+              mirror_x(bb);
+            if (j==0 || j == 2)
+              mirror_y(bb);
+            shift_x(bb,i);
+            shift_y(bb,j);
+            newBBoxes.push_back(bb);
+            newInstances.push_back(ii);
+          }
+      ii++;
+    }
+  bboxes.clear();
+  bboxes.insert(bboxes.end(),newBBoxes.begin(), newBBoxes.end());
+  instances.clear();
+  instances.insert(instances.end(),newInstances.begin(), newInstances.end());
+}
 
 void getEnlargedImage(const cv::Mat& in_img, const GeometryParameter& param, cv::Mat &in_img_enlarged)
 {
@@ -914,6 +1068,84 @@ void ApplyZoom(const cv::Mat& in_img, cv::Mat& out_img,
   cv::resize(in_lbl(zone), out_lbl, cv::Size(in_img.cols, in_img.rows), 0,0, cv::INTER_NEAREST);
 }
 
+
+void ApplyGeometry(const cv::Mat& in_img, cv::Mat& out_img,
+                   const AnnotatedDatum& anno_datum,
+                   AnnotatedDatum& geom_anno_datum,
+                   const GeometryParameter& param)
+{
+  geom_anno_datum.set_type(anno_datum.type());
+
+  bool nochange = false;
+  if (param.prob() > 0.0)
+    {
+      vector<float> binary_probs;
+      binary_probs = {1.f-param.prob(),param.prob()};
+      nochange = (roll_weighted_die(binary_probs) != 1);
+    }
+  else nochange = true;
+      
+
+  
+  if (nochange)
+    {
+      out_img = in_img;
+      for (int g = 0; g < anno_datum.annotation_group_size(); ++g) 
+        geom_anno_datum.mutable_annotation_group()->Add()->CopyFrom(anno_datum.annotation_group(g));
+      return;
+    }
+
+  if (anno_datum.type() != AnnotatedDatum_AnnotationType_BBOX)
+    {
+      LOG(ERROR) << "Unknown annotation type.";
+      LOG(FATAL) << "fatal error";
+    }
+  
+  for (int g = 0; g < anno_datum.annotation_group_size(); ++g) {
+    std::vector<int> instances;
+    std::vector<NormalizedBBox> bboxes;
+
+
+    const AnnotationGroup& anno_group = anno_datum.annotation_group(g);
+    AnnotationGroup geom_anno_group;
+    for (int a = 0; a < anno_group.annotation_size(); ++a) {
+      const Annotation& anno = anno_group.annotation(a);
+      NormalizedBBox bbox = anno.bbox();
+      bboxes.push_back(bbox);
+      instances.push_back(anno.instance_id());
+    }
+  
+    cv::Mat in_img_enlarged;
+    getEnlargedImage(in_img, param, in_img_enlarged);
+    getEnlargedBBoxes(in_img.rows, in_img.cols, param,bboxes,instances);
+
+  
+    // Input Quadilateral or Image plane coordinates
+    cv::Point2f inputQuad[4];
+    // Output Quadilateral or World plane coordinates
+    cv::Point2f outputQuad[4];
+    
+    getQuads(in_img.rows, in_img.cols, param, inputQuad, outputQuad);
+    
+    // Get the Perspective Transform Matrix i.e. lambda
+    cv::Mat lambda = getPerspectiveTransform( inputQuad, outputQuad );
+    warpPerspective(in_img_enlarged,out_img,lambda,in_img.size());
+    
+    warpBBoxes(bboxes, lambda,in_img.rows, in_img.cols);
+    filterBBoxes(bboxes, instances);
+
+    for (int i=0;i <bboxes.size(); ++i)
+      {
+        NormalizedBBox bb = bboxes[i];
+        Annotation * geom_annot = geom_anno_group.add_annotation();
+        geom_annot->set_instance_id(instances[i]);
+        NormalizedBBox* geom_bbox = geom_annot->mutable_bbox();
+        geom_bbox->CopyFrom(bb);
+      }
+    geom_anno_group.set_group_label(anno_group.group_label());
+    geom_anno_datum.mutable_annotation_group()->Add()->CopyFrom(geom_anno_group);
+  }
+}
 
 void ApplyGeometry(const cv::Mat& in_img, cv::Mat& out_img,
                       const cv::Mat& in_lbl, cv::Mat& out_lbl,
