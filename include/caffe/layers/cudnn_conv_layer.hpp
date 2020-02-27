@@ -30,7 +30,27 @@ template <typename Dtype>
 class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
  public:
   explicit CuDNNConvolutionLayer(const LayerParameter& param)
-      : ConvolutionLayer<Dtype>(param), handles_setup_(false) {}
+    : ConvolutionLayer<Dtype>(param), handles_setup_(false)
+  {
+    switch (param.convolution_param().cudnn_flavor())
+      {
+      case ConvolutionParameter::SINGLE_HANDLE:
+        multiple_handles_ = false;
+        min_memory_ = false;
+        break;
+      case ConvolutionParameter::MULTIPLE_HANDLES:
+        multiple_handles_ = true;
+        min_memory_ = false;
+        break;
+      case ConvolutionParameter::MIN_MEMORY:
+        multiple_handles_ = false;
+        min_memory_ = true;
+        break;
+      default:
+        multiple_handles_ = false;
+        min_memory_ = false;
+      }
+  }
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
@@ -47,10 +67,21 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   cudnnHandle_t* handle_;
   cudaStream_t*  stream_;
 
+
+
+
   // algorithms for forward and backwards convolutions
   cudnnConvolutionFwdAlgo_t *fwd_algo_;
   cudnnConvolutionBwdFilterAlgo_t *bwd_filter_algo_;
   cudnnConvolutionBwdDataAlgo_t *bwd_data_algo_;
+
+  bool multiple_handles_;
+  bool min_memory_;
+#if CUDNN_VERSION_MIN(7,0,0)
+  std::vector<cudnnConvolutionFwdAlgoPerf_t> fwdPerf_;
+  std::vector<cudnnConvolutionBwdFilterAlgoPerf_t> bwdFilterPerf_;
+  std::vector<cudnnConvolutionBwdDataAlgoPerf_t> bwdDataPerf_;
+#endif
 
   vector<cudnnTensorDescriptor_t> bottom_descs_, top_descs_;
   cudnnTensorDescriptor_t    bias_desc_;
