@@ -170,32 +170,44 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
         expand_datum = &anno_datum;
       }
     }
+
+    AnnotatedDatum* geometry_datum = NULL;
+    if (transform_param.has_geometry_param())
+      {
+        geometry_datum = new AnnotatedDatum();
+        this->data_transformer_->GeometryImage(*expand_datum, geometry_datum);
+      }
+    else
+      {
+        geometry_datum = expand_datum;
+      }
+
     AnnotatedDatum* rotate_datum = NULL;
     if (transform_param.rotate()) {
       rotate_datum = new AnnotatedDatum();
-      this->data_transformer_->RotateImage(*expand_datum, rotate_datum);
+      this->data_transformer_->RotateImage(*geometry_datum, rotate_datum);
     } else {
-      rotate_datum = expand_datum;
+      rotate_datum = geometry_datum;
     }
     AnnotatedDatum* sampled_datum = NULL;
     bool has_sampled = false;
     if (batch_samplers_.size() > 0) {
-      // Generate sampled bboxes from expand_datum.
+      // Generate sampled bboxes from rotate_datum.
       vector<NormalizedBBox> sampled_bboxes;
-      GenerateBatchSamples(*expand_datum, batch_samplers_, &sampled_bboxes);
+      GenerateBatchSamples(*rotate_datum, batch_samplers_, &sampled_bboxes);
       if (sampled_bboxes.size() > 0) {
         // Randomly pick a sampled bbox and crop the expand_datum.
         int rand_idx = caffe_rng_rand() % sampled_bboxes.size();
         sampled_datum = new AnnotatedDatum();
-        this->data_transformer_->CropImage(*expand_datum,
+        this->data_transformer_->CropImage(*rotate_datum,
                                            sampled_bboxes[rand_idx],
                                            sampled_datum);
         has_sampled = true;
       } else {
-        sampled_datum = expand_datum;
+        sampled_datum = rotate_datum;
       }
     } else {
-      sampled_datum = expand_datum;
+      sampled_datum = rotate_datum;
     }
     CHECK(sampled_datum != NULL);
     timer.Start();
@@ -264,6 +276,10 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     if (transform_param.rotate()) {
       delete rotate_datum;
     }
+    if (transform_param.has_geometry_param())
+      {
+        delete geometry_datum;
+      }
     trans_time += timer.MicroSeconds();
 
     reader_.free().push(const_cast<AnnotatedDatum*>(&anno_datum));

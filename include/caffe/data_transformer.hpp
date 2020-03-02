@@ -157,7 +157,14 @@ class DataTransformer {
    */
   void RotateImage(const AnnotatedDatum& anno_datum,
 		   AnnotatedDatum* rotated_anno_datum);
-  
+
+  /**
+   * @brief Apply geometry transform to  annotated datum and annotations (bbox)
+   */
+  void GeometryImage(const AnnotatedDatum& anno_datum,
+                     AnnotatedDatum* geometry_anno_datum);
+
+
   /**
    * @brief Applies the transformation defined in the data layer's
    * transform_param block to a vector of Mat.
