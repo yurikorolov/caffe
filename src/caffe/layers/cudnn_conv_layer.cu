@@ -54,8 +54,9 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
                                             bottom_descs_[i], bottom_data,
                                             filter_desc_, weight,
                                             conv_descs_[i],
-                                            fwdPerf_[i].algo, workspaceData,
-                                            fwdPerf_[i].memory,
+                                            fwd_algo_[i],
+                                            workspaceData,
+                                            workspace_fwd_sizes_[i],
                                             cudnn::dataType<Dtype>::zero,
                                             top_descs_[i], top_data));
 
@@ -164,8 +165,9 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
                                                        bottom_descs_[i], bottom_data,
                                                        top_descs_[i],    top_diff,
                                                        conv_descs_[i],
-                                                       bwdFilterPerf_[i].algo, workspaceData,
-                                                       bwdFilterPerf_[i].memory,
+                                                       bwd_filter_algo_[i],
+                                                       workspaceData,
+                                                       workspace_bwd_filter_sizes_[i],
                                                        cudnn::dataType<Dtype>::one,
                                                        filter_desc_, weight_diff));
           }
@@ -182,8 +184,9 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
                                                      filter_desc_, weight,
                                                      top_descs_[i], top_diff,
                                                      conv_descs_[i],
-                                                     bwdDataPerf_[i].algo, workspaceData,
-                                                     bwdDataPerf_[i].memory,
+                                                     bwd_data_algo_[i],
+                                                     workspaceData,
+                                                     workspace_bwd_data_sizes_[i],
                                                      cudnn::dataType<Dtype>::zero,
                                                      bottom_descs_[i], bottom_diff));
           }
