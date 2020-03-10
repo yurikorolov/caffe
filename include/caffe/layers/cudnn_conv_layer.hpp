@@ -67,9 +67,6 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   cudnnHandle_t* handle_;
   cudaStream_t*  stream_;
 
-
-
-
   // algorithms for forward and backwards convolutions
   cudnnConvolutionFwdAlgo_t *fwd_algo_;
   cudnnConvolutionBwdFilterAlgo_t *bwd_filter_algo_;
@@ -77,11 +74,6 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
 
   bool multiple_handles_;
   bool min_memory_;
-#if CUDNN_VERSION_MIN(7,0,0)
-  std::vector<cudnnConvolutionFwdAlgoPerf_t> fwdPerf_;
-  std::vector<cudnnConvolutionBwdFilterAlgoPerf_t> bwdFilterPerf_;
-  std::vector<cudnnConvolutionBwdDataAlgoPerf_t> bwdDataPerf_;
-#endif
 
   vector<cudnnTensorDescriptor_t> bottom_descs_, top_descs_;
   cudnnTensorDescriptor_t    bias_desc_;
