@@ -162,6 +162,12 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       } else {
         expand_datum = &distort_datum;
       }
+      if (expand_datum &&
+	  (expand_datum->datum().width() == 0 || expand_datum->datum().height() == 0))
+	{
+	  LOG(WARNING) << "Expand augmentation failure";
+	  expand_datum = &distort_datum;
+	}
     } else {
       if (transform_param.has_expand_param()) {
         expand_datum = new AnnotatedDatum();
@@ -172,7 +178,8 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     }
 
     AnnotatedDatum* geometry_datum = NULL;
-    if (transform_param.has_geometry_param())
+    if (transform_param.has_geometry_param()
+	&& transform_param.geometry_param().prob() > 0.0)
       {
         geometry_datum = new AnnotatedDatum();
         this->data_transformer_->GeometryImage(*expand_datum, geometry_datum);
@@ -181,7 +188,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       {
         geometry_datum = expand_datum;
       }
-
+    
     AnnotatedDatum* rotate_datum = NULL;
     if (transform_param.rotate()) {
       rotate_datum = new AnnotatedDatum();
@@ -276,7 +283,8 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     if (transform_param.rotate()) {
       delete rotate_datum;
     }
-    if (transform_param.has_geometry_param())
+    if (transform_param.has_geometry_param()
+	&& transform_param.geometry_param().prob())
       {
         delete geometry_datum;
       }

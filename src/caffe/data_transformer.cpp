@@ -694,6 +694,12 @@ void DataTransformer<Dtype>::GeometryImage(const AnnotatedDatum& anno_datum,
     // cv::imwrite("/tmp/cv.jpg", cv_img);
     // cv::imwrite("/tmp/geom.jpg", geom_img);
 
+    if (geom_img.empty())
+      {
+	LOG(WARNING) << "failed geometry augmentation on image"; // no image name since from datum
+	geom_img = cv_img;
+      }
+    
     EncodeCVMatToDatum(geom_img, "jpg", geometry_anno_datum->mutable_datum());
     return;
 #else
