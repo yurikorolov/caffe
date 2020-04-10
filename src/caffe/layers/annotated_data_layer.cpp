@@ -7,6 +7,8 @@
 #include <map>
 #include <vector>
 
+#include <omp.h>
+
 #include "caffe/data_transformer.hpp"
 #include "caffe/layers/annotated_data_layer.hpp"
 #include "caffe/util/benchmark.hpp"
@@ -52,7 +54,7 @@ void AnnotatedDataLayer<Dtype>::DataLayerSetUp(
   // Use data_transformer to infer the expected blob shape from anno_datum.
   vector<int> top_shape =
       this->data_transformer_->InferBlobShape(anno_datum.datum());
-  this->transformed_data_.Reshape(top_shape);
+  //this->transformed_data_.Reshape(top_shape);
   // Reshape top[0] and prefetch_data according to the batch_size.
   top_shape[0] = batch_size;
   top[0]->Reshape(top_shape);
@@ -116,7 +118,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   double trans_time = 0;
   CPUTimer timer;
   CHECK(batch->data_.count());
-  CHECK(this->transformed_data_.count());
+  //CHECK(this->transformed_data_.count());
 
   // Reshape according to the first anno_datum of each batch
   // on single input batches allows for inputs of varying dimension.
@@ -128,8 +130,26 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   AnnotatedDatum& anno_datum = *(reader_.full().peek());
   // Use data_transformer to infer the expected blob shape from anno_datum.
   vector<int> top_shape =
-      this->data_transformer_->InferBlobShape(anno_datum.datum());
-  this->transformed_data_.Reshape(top_shape);
+    this->data_transformer_->InferBlobShape(anno_datum.datum());
+
+  // array for omp
+  if(!this->transformed_data_array_.size()) {
+    this->transformed_data_array_.resize(batch_size);
+    for(int i = 0; i < batch_size; i++) {
+      this->transformed_data_array_[i].reset(new Blob<Dtype>);
+    }
+  } else {
+    for(int i = 0; i < batch_size; i++) {
+      if(!this->transformed_data_array_[i].get())
+        this->transformed_data_array_[i].reset(new Blob<Dtype>);
+    }
+  }
+  for(int i = 0; i < batch_size; i++) {
+    this->transformed_data_array_[i]->Reshape(top_shape);
+    CHECK(this->transformed_data_array_[i]->count());
+  }
+  
+  //this->transformed_data_.Reshape(top_shape);
   // Reshape batch according to the batch_size.
   top_shape[0] = batch_size;
   batch->data_.Reshape(top_shape);
@@ -144,6 +164,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   map<int, vector<AnnotationGroup> > all_anno;
   int num_bboxes = 0;
 
+#pragma omp parallel for
   for (int item_id = 0; item_id < batch_size; ++item_id) {
     timer.Start();
     // get a anno_datum
@@ -223,7 +244,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     if (transform_param.has_resize_param()) {
       if (transform_param.resize_param().resize_mode() ==
           ResizeParameter_Resize_mode_FIT_SMALL_SIZE) {
-        this->transformed_data_.Reshape(shape);
+        this->transformed_data_array_[item_id]->Reshape(shape);
         batch->data_.Reshape(shape);
         top_data = batch->data_.mutable_cpu_data();
       } else {
@@ -236,7 +257,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     }
     // Apply data transformations (mirror, scale, crop...)
     int offset = batch->data_.offset(item_id);
-    this->transformed_data_.set_cpu_data(top_data + offset);
+    this->transformed_data_array_[item_id]->set_cpu_data(top_data + offset);
     vector<AnnotationGroup> transformed_anno_vec;
     if (this->output_labels_) {
       if (has_anno_type_) {
@@ -251,7 +272,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
         // Transform datum and annotation_group at the same time
         transformed_anno_vec.clear();
         this->data_transformer_->Transform(*sampled_datum,
-                                           &(this->transformed_data_),
+                                           this->transformed_data_array_[item_id].get(),
                                            &transformed_anno_vec);
         if (anno_type_ == AnnotatedDatum_AnnotationType_BBOX) {
           // Count the number of bboxes.
@@ -261,17 +282,20 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
         } else {
           LOG(FATAL) << "Unknown annotation type.";
         }
-        all_anno[item_id] = transformed_anno_vec;
+#pragma omp critical
+	{
+	  all_anno[item_id] = transformed_anno_vec;
+	}
       } else {
         this->data_transformer_->Transform(sampled_datum->datum(),
-                                           &(this->transformed_data_));
+                                           this->transformed_data_array_[item_id].get());
         // Otherwise, store the label from datum.
         CHECK(sampled_datum->datum().has_label()) << "Cannot find any label.";
         top_label[item_id] = sampled_datum->datum().label();
       }
     } else {
       this->data_transformer_->Transform(sampled_datum->datum(),
-                                         &(this->transformed_data_));
+                                         this->transformed_data_array_[item_id].get());
     }
     // clear memory
     if (has_sampled) {
