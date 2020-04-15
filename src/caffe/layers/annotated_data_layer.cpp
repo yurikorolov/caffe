@@ -112,11 +112,11 @@ void AnnotatedDataLayer<Dtype>::DataLayerSetUp(
 // This function is called on prefetch thread
 template<typename Dtype>
 void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
-  CPUTimer batch_timer;
-  batch_timer.Start();
+  //CPUTimer batch_timer;
+  /*batch_timer.Start();
   double read_time = 0;
-  double trans_time = 0;
-  CPUTimer timer;
+  double trans_time = 0;*/
+  //CPUTimer timer;
   CHECK(batch->data_.count());
   //CHECK(this->transformed_data_.count());
 
@@ -149,7 +149,6 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     CHECK(this->transformed_data_array_[i]->count());
   }
   
-  //this->transformed_data_.Reshape(top_shape);
   // Reshape batch according to the batch_size.
   top_shape[0] = batch_size;
   batch->data_.Reshape(top_shape);
@@ -166,11 +165,11 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
 #pragma omp parallel for
   for (int item_id = 0; item_id < batch_size; ++item_id) {
-    timer.Start();
+    //timer.Start();
     // get a anno_datum
     AnnotatedDatum& anno_datum = *(reader_.full().pop("Waiting for data"));
-    read_time += timer.MicroSeconds();
-    timer.Start();
+    //read_time += timer.MicroSeconds();
+    //timer.Start();
     AnnotatedDatum distort_datum;
     AnnotatedDatum* expand_datum = NULL;
     if (transform_param.has_distort_param()) {
@@ -238,7 +237,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       sampled_datum = rotate_datum;
     }
     CHECK(sampled_datum != NULL);
-    timer.Start();
+    //timer.Start();
     vector<int> shape =
         this->data_transformer_->InferBlobShape(sampled_datum->datum());
     if (transform_param.has_resize_param()) {
@@ -312,7 +311,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       {
         delete geometry_datum;
       }
-    trans_time += timer.MicroSeconds();
+    //trans_time += timer.MicroSeconds();
 
     reader_.free().push(const_cast<AnnotatedDatum*>(&anno_datum));
   }
@@ -358,11 +357,11 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       LOG(FATAL) << "Unknown annotation type.";
     }
   }
-  timer.Stop();
+  /*timer.Stop();
   batch_timer.Stop();
   DLOG(INFO) << "Prefetch batch: " << batch_timer.MilliSeconds() << " ms.";
   DLOG(INFO) << "     Read time: " << read_time / 1000 << " ms.";
-  DLOG(INFO) << "Transform time: " << trans_time / 1000 << " ms.";
+  DLOG(INFO) << "Transform time: " << trans_time / 1000 << " ms.";*/
 }
 
 INSTANTIATE_CLASS(AnnotatedDataLayer);
