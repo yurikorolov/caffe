@@ -217,6 +217,7 @@ ifeq ($(USE_OPENCV), 1)
 	endif
 
 	ifeq ($(OPENCV_VERSION), 4)
+		INCLUDE_DIRS += "/usr/include/opencv4"
 		LIBRARIES += opencv_imgcodecs opencv_videoio
 	endif
 
