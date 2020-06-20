@@ -6,6 +6,9 @@
 #define LLOGGING_H
 
 #include <spdlog/spdlog.h>
+#if SPDLOG_VER_MINOR >= 5
+#include <spdlog/sinks/stdout_color_sinks.h>
+#endif
 #include <boost/algorithm/string.hpp>
 #include <iostream>
 
@@ -152,7 +155,11 @@ class CaffeLogger
 #ifdef USE_SYSLOG
       _console = spdlog::syslog_logger("caffe");
 #else
+#if SPDLOG_VER_MINOR >= 5
+      _console = spdlog::stdout_color_mt("caffe");
+#else
       _console = spdlog::stdout_logger_mt("caffe");
+#endif
 #endif
   }
 
