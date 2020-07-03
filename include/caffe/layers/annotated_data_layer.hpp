@@ -38,6 +38,7 @@ class AnnotatedDataLayer : public BasePrefetchingDataLayer<Dtype> {
   string label_map_file_;
 
   vector<shared_ptr<Blob<Dtype> > > transformed_data_array_;
+  std::vector<int> top_shape_;
 };
 
 }  // namespace caffe
