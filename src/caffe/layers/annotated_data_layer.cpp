@@ -52,14 +52,14 @@ void AnnotatedDataLayer<Dtype>::DataLayerSetUp(
   AnnotatedDatum& anno_datum = *(reader_.full().peek());
 
   // Use data_transformer to infer the expected blob shape from anno_datum.
-  vector<int> top_shape =
+  top_shape_ =
       this->data_transformer_->InferBlobShape(anno_datum.datum());
   //this->transformed_data_.Reshape(top_shape);
   // Reshape top[0] and prefetch_data according to the batch_size.
-  top_shape[0] = batch_size;
-  top[0]->Reshape(top_shape);
+  top_shape_[0] = batch_size;
+  top[0]->Reshape(top_shape_);
   for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
-    this->prefetch_[i].data_.Reshape(top_shape);
+    this->prefetch_[i].data_.Reshape(top_shape_);
   }
   LOG(INFO) << "output data size: " << top[0]->num() << ","
       << top[0]->channels() << "," << top[0]->height() << ","
@@ -122,16 +122,14 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
   // Reshape according to the first anno_datum of each batch
   // on single input batches allows for inputs of varying dimension.
+  // DD: useless, deactivated
   const int batch_size = this->layer_param_.data_param().batch_size();
   const AnnotatedDataParameter& anno_data_param =
       this->layer_param_.annotated_data_param();
   const TransformationParameter& transform_param =
     this->layer_param_.transform_param();
-  AnnotatedDatum& anno_datum = *(reader_.full().peek());
-  // Use data_transformer to infer the expected blob shape from anno_datum.
-  vector<int> top_shape =
-    this->data_transformer_->InferBlobShape(anno_datum.datum());
-
+  vector<int> top_shape = top_shape_;
+   
   // array for omp
   if(!this->transformed_data_array_.size()) {
     this->transformed_data_array_.resize(batch_size);
@@ -162,19 +160,21 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   // Store transformed annotation.
   map<int, vector<AnnotationGroup> > all_anno;
   int num_bboxes = 0;
-
-#pragma omp parallel for
+  
+  #pragma omp parallel for
   for (int item_id = 0; item_id < batch_size; ++item_id) {
+    //std::lock_guard<std::mutex> lock(pop_mutex_);
     //timer.Start();
     // get a anno_datum
-    AnnotatedDatum& anno_datum = *(reader_.full().pop("Waiting for data"));
+    AnnotatedDatum *anno_datum = (reader_.full().pop("Waiting for data"));
+    
     //read_time += timer.MicroSeconds();
     //timer.Start();
     AnnotatedDatum distort_datum;
     AnnotatedDatum* expand_datum = NULL;
     if (transform_param.has_distort_param()) {
-      distort_datum.CopyFrom(anno_datum);
-      this->data_transformer_->DistortImage(anno_datum.datum(),
+      distort_datum.CopyFrom(*anno_datum);
+      this->data_transformer_->DistortImage(anno_datum->datum(),
                                             distort_datum.mutable_datum());
       if (transform_param.has_expand_param()) {
         expand_datum = new AnnotatedDatum();
@@ -191,9 +191,9 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     } else {
       if (transform_param.has_expand_param()) {
         expand_datum = new AnnotatedDatum();
-        this->data_transformer_->ExpandImage(anno_datum, expand_datum);
+        this->data_transformer_->ExpandImage(*anno_datum, expand_datum);
       } else {
-        expand_datum = &anno_datum;
+        expand_datum = anno_datum;
       }
     }
 
@@ -215,53 +215,60 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       this->data_transformer_->RotateImage(*geometry_datum, rotate_datum);
     } else {
       rotate_datum = geometry_datum;
-    }
+      }
+
     AnnotatedDatum* sampled_datum = NULL;
     bool has_sampled = false;
-    if (batch_samplers_.size() > 0) {
-      // Generate sampled bboxes from rotate_datum.
-      vector<NormalizedBBox> sampled_bboxes;
-      GenerateBatchSamples(*rotate_datum, batch_samplers_, &sampled_bboxes);
-      if (sampled_bboxes.size() > 0) {
-        // Randomly pick a sampled bbox and crop the expand_datum.
-        int rand_idx = caffe_rng_rand() % sampled_bboxes.size();
-        sampled_datum = new AnnotatedDatum();
-        this->data_transformer_->CropImage(*rotate_datum,
-                                           sampled_bboxes[rand_idx],
-                                           sampled_datum);
-        has_sampled = true;
+    int offset = 0;
+
+#pragma omp critical
+    {
+      if (batch_samplers_.size() > 0) {
+	// Generate sampled bboxes from rotate_datum.
+	vector<NormalizedBBox> sampled_bboxes;
+	GenerateBatchSamples(*rotate_datum, batch_samplers_, &sampled_bboxes);
+	if (sampled_bboxes.size() > 0) {
+	  // Randomly pick a sampled bbox and crop the expand_datum.
+	  int rand_idx = caffe_rng_rand() % sampled_bboxes.size();
+	  sampled_datum = new AnnotatedDatum();
+	  this->data_transformer_->CropImage(*rotate_datum,
+					     sampled_bboxes[rand_idx],
+					     sampled_datum);
+	  has_sampled = true;
+	} else {
+	  sampled_datum = rotate_datum;
+	}
       } else {
-        sampled_datum = rotate_datum;
+	sampled_datum = rotate_datum;
       }
-    } else {
-      sampled_datum = rotate_datum;
-    }
-    CHECK(sampled_datum != NULL);
-    //timer.Start();
-    vector<int> shape =
+      CHECK(sampled_datum != NULL);
+      //timer.Start();
+      vector<int> shape =
         this->data_transformer_->InferBlobShape(sampled_datum->datum());
-    if (transform_param.has_resize_param()) {
-      if (transform_param.resize_param().resize_mode() ==
-          ResizeParameter_Resize_mode_FIT_SMALL_SIZE) {
-        this->transformed_data_array_[item_id]->Reshape(shape);
-        batch->data_.Reshape(shape);
-        top_data = batch->data_.mutable_cpu_data();
+      if (transform_param.has_resize_param()) {
+	if (transform_param.resize_param().resize_mode() ==
+	    ResizeParameter_Resize_mode_FIT_SMALL_SIZE) {
+	  this->transformed_data_array_[item_id]->Reshape(shape);
+	  batch->data_.Reshape(shape);
+	  top_data = batch->data_.mutable_cpu_data();
+	} else {
+	  CHECK(std::equal(top_shape.begin() + 1, top_shape.begin() + 4,
+			   shape.begin() + 1));
+	}
       } else {
-        CHECK(std::equal(top_shape.begin() + 1, top_shape.begin() + 4,
-              shape.begin() + 1));
+	CHECK(std::equal(top_shape.begin() + 1, top_shape.begin() + 4,
+			 shape.begin() + 1));
       }
-    } else {
-      CHECK(std::equal(top_shape.begin() + 1, top_shape.begin() + 4,
-            shape.begin() + 1));
-    }
-    // Apply data transformations (mirror, scale, crop...)
-    int offset = batch->data_.offset(item_id);
+      // Apply data transformations (mirror, scale, crop...)
+      offset = batch->data_.offset(item_id);
+    } // end critical
+
     this->transformed_data_array_[item_id]->set_cpu_data(top_data + offset);
     vector<AnnotationGroup> transformed_anno_vec;
     if (this->output_labels_) {
       if (has_anno_type_) {
         // Make sure all data have same annotation type.
-        CHECK(sampled_datum->has_type()) << "Some datum misses AnnotationType.";
+        CHECK(sampled_datum->has_type()) << "A datum misses AnnotationType.";
         if (anno_data_param.has_anno_type()) {
           sampled_datum->set_type(anno_type_);
         } else {
@@ -296,6 +303,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       this->data_transformer_->Transform(sampled_datum->datum(),
                                          this->transformed_data_array_[item_id].get());
     }
+    
     // clear memory
     if (has_sampled) {
       delete sampled_datum;
@@ -313,7 +321,7 @@ void AnnotatedDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       }
     //trans_time += timer.MicroSeconds();
 
-    reader_.free().push(const_cast<AnnotatedDatum*>(&anno_datum));
+    reader_.free().push(const_cast<AnnotatedDatum*>(anno_datum));
   }
 
   // Store "rich" annotation if needed.
