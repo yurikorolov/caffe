@@ -653,7 +653,7 @@ void AdjustContrast(const cv::Mat& in_img, const float delta,
 
 void RandomSaturation(const cv::Mat& in_img, cv::Mat* out_img,
     const bool saturation, const float lower, const float upper) {
-  if (saturation) {
+  if (in_img.channels() == 3 && saturation) {
     CHECK_GE(upper, lower) << "saturation upper must be >= lower.";
     CHECK_GE(lower, 0) << "saturation lower must be non-negative.";
     float delta;
@@ -687,7 +687,7 @@ void AdjustSaturation(const cv::Mat& in_img, const float delta,
 
 void RandomHue(const cv::Mat& in_img, cv::Mat* out_img,
                const bool hue, const float hue_delta) {
-  if (hue) {
+  if (in_img.channels() == 3 && hue) {
     CHECK_GE(hue_delta, 0) << "hue_delta must be non-negative.";
     float delta;
     caffe_rng_uniform(1, -hue_delta, hue_delta, &delta);
@@ -719,7 +719,7 @@ void AdjustHue(const cv::Mat& in_img, const float delta, cv::Mat* out_img) {
 
 void RandomOrderChannels(const cv::Mat& in_img, cv::Mat* out_img,
                          const bool random_order) {
-  if (random_order) {
+  if (in_img.channels() == 3 && random_order) {
     // Split the image to 3 channels.
     vector<cv::Mat> channels;
     cv::split(*out_img, channels);
