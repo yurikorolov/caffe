@@ -5,9 +5,15 @@
 #ifndef LLOGGING_H
 #define LLOGGING_H
 
+#ifdef USE_SYSLOG
+#define SPDLOG_ENABLE_SYSLOG
+#endif
 #include <spdlog/spdlog.h>
 #if SPDLOG_VER_MAJOR > 0
 #include <spdlog/sinks/stdout_color_sinks.h>
+#ifdef USE_SYSLOG
+#include <spdlog/sinks/syslog_sinks.h>
+#endif
 #endif
 #include <boost/algorithm/string.hpp>
 #include <iostream>
@@ -152,11 +158,15 @@ class CaffeLogger
   {
     _console = spdlog::get("caffe");
     if (!_console)
+#if SPDLOG_VER_MAJOR > 0
+#ifdef USE_SYSLOG
+      _console = spdlog::syslog_logger_mt("caffe");
+#else
+      _console = spdlog::stdout_color_mt("caffe");
+#endif
+#else
 #ifdef USE_SYSLOG
       _console = spdlog::syslog_logger("caffe");
-#else
-#if SPDLOG_VER_MAJOR > 0
-      _console = spdlog::stdout_color_mt("caffe");
 #else
       _console = spdlog::stdout_logger_mt("caffe");
 #endif
