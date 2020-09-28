@@ -51,6 +51,10 @@ inline const char* cudnnGetErrorString(cudnnStatus_t status) {
   case CUDNN_STATUS_RUNTIME_IN_PROGRESS:
     return "CUDNN_STATUS_RUNTIME_IN_PROGRESS";
 #endif
+#if CUDNN_VERSION_MIN(8, 0, 0)
+  case CUDNN_STATUS_VERSION_MISMATCH:
+    return "CUDNN_STATUS_VERSION_MISMATCH";
+#endif
   }
   return "Unknown cudnn status";
 }

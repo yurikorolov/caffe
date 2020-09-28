@@ -108,12 +108,17 @@ namespace caffe {
 
   template <typename Dtype>
   void CuDNNConvolutionLayer<Dtype>::Reshape(
-                                             const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+                                             const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {    
     ConvolutionLayer<Dtype>::Reshape(bottom, top);
     CHECK_EQ(2, this->num_spatial_axes_)
       << "CuDNNConvolution input must have 2 spatial axes "
       << "(e.g., height and width). "
       << "Use 'engine: CAFFE' for general ND convolution.";
+
+    // We don't look for best cudnn algorithm if already set.
+    if (algo_set_)
+      return;
+
 #if CUDNN_VERSION_MIN(7,0,0)
     if (multiple_handles_)
       {
@@ -137,15 +142,12 @@ namespace caffe {
     // Specify workspace limit for kernels directly until we have a
     // planning strategy and a rewrite of Caffe's GPU memory mangagement
 
-
     for (int i = 0; i < bottom.size(); i++)
       {
 #if CUDNN_VERSION_MIN(7,0,0)
         if (multiple_handles_)
           {
 #endif
-            size_t workspace_limit_bytes = 8*1024*1024;
-
             cudnn::setTensor4dDesc<Dtype>(&bottom_descs_[i],
                                           this->num_,
                                           this->channels_ / this->group_, height, width,
@@ -160,6 +162,9 @@ namespace caffe {
                                              filter_desc_, pad_h, pad_w,
                                              stride_h, stride_w);
             // choose forward and backward algorithms + workspace(s)
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
+	    size_t workspace_limit_bytes = 8*1024*1024;
             CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm(handle_[0],
                                                             bottom_descs_[i],
                                                             filter_desc_,
@@ -176,7 +181,10 @@ namespace caffe {
                                                                 top_descs_[i],
                                                                 fwd_algo_[i],
                                                                 &(workspace_fwd_sizes_[i])));
-
+#endif
+	    
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
             // choose backward algorithm for filter
             CUDNN_CHECK(cudnnGetConvolutionBackwardFilterAlgorithm(
                                                                    handle_[0],
@@ -188,7 +196,10 @@ namespace caffe {
             CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(handle_[0],
                                                                        bottom_descs_[i], top_descs_[i], conv_descs_[i], filter_desc_,
                                                                        bwd_filter_algo_[i], &workspace_bwd_filter_sizes_[i]));
-
+#endif
+	    
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
             // choose backward algo for data
             CUDNN_CHECK(cudnnGetConvolutionBackwardDataAlgorithm(handle_[0],
                                                                  filter_desc_, top_descs_[i], conv_descs_[i], bottom_descs_[i],
@@ -199,7 +210,8 @@ namespace caffe {
             CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(handle_[0],
                                                                      filter_desc_, top_descs_[i], conv_descs_[i], bottom_descs_[i],
                                                                      bwd_data_algo_[i], &workspace_bwd_data_sizes_[i]) );
-
+#endif
+	    
             // reduce over all workspace sizes to get a maximum to allocate / reallocate
             size_t total_workspace_fwd = 0;
             size_t total_workspace_bwd_data = 0;
@@ -260,7 +272,7 @@ namespace caffe {
               }
 #if CUDNN_VERSION_MIN(7,0,0)
           }
-        else
+        else // multiple_handles
           {
             cudnn::setTensor4dDesc<Dtype>(&bottom_descs_[i],
                                           this->num_,
@@ -279,9 +291,44 @@ namespace caffe {
             cudnnSetConvolutionGroupCount(conv_descs_[i], this->group_);
 
             if (!min_memory_)
-              {
-                size_t workspace_limit_bytes = 8*1024*1024;
+              {	
+#if CUDNN_VERSION_MIN(8,0,0)
+		int requestedAlgoCount = 0;
+		int returnedAlgoCount = 0;
+		CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithmMaxCount(handle_[0], &requestedAlgoCount));
+		std::vector<cudnnConvolutionFwdAlgoPerf_t> results_fwd(requestedAlgoCount);
+		CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm_v7(handle_[0],
+								   bottom_descs_[i],
+								   filter_desc_,
+								   conv_descs_[i],
+								   top_descs_[i],
+								   requestedAlgoCount,
+								   &returnedAlgoCount,
+								   &results_fwd[0]));
+		size_t free_memory, total_memory;
+		CAFFE1_CUDA_CHECK(cudaMemGetInfo(&free_memory, &total_memory));
 
+		bool found_conv_algorithm = false;
+		for (int j=0;j<returnedAlgoCount;j++)
+		  {
+		    if (results_fwd[j].status == CUDNN_STATUS_SUCCESS &&
+			results_fwd[j].algo != CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED &&
+			results_fwd[j].memory < free_memory)
+		      {
+			found_conv_algorithm = true;
+			fwd_algo_[i] = results_fwd[j].algo;
+			workspace_fwd_sizes_[i] = results_fwd[j].memory;
+			cudnnSetConvolutionMathType(conv_descs_[i],results_fwd[i].mathType);
+		      }
+		  }
+		if (!found_conv_algorithm)
+		  {
+		    cudnnStatus_t cstatus = CUDNN_STATUS_NOT_INITIALIZED;
+		    LOG(INFO) << "could not find proper cudnn conv algorithm";
+		    CUDNN_CHECK(cstatus);
+		  }
+#else
+		size_t workspace_limit_bytes = 8*1024*1024;
                 CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm(handle_[0],
                                 bottom_descs_[i],
                                 filter_desc_,
@@ -290,7 +337,7 @@ namespace caffe {
                                 CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT,
                                 workspace_limit_bytes,
                                 &fwd_algo_[i]));
-
+		
                 CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(handle_[0],
                                   bottom_descs_[i],
                                   filter_desc_,
@@ -298,37 +345,108 @@ namespace caffe {
                                   top_descs_[i],
                                   fwd_algo_[i],
                                   &(workspace_fwd_sizes_[i])));
+#endif
                 if (workspace_fwd_sizes_[i] > workspaceSizeInBytes)
                   workspaceSizeInBytes = workspace_fwd_sizes_[i];
 
 
             // choose backward algorithm for filter
+#if CUDNN_VERSION_MIN(8,0,0)
+		requestedAlgoCount = 0;
+		returnedAlgoCount = 0;
+		CUDNN_CHECK(cudnnGetConvolutionBackwardFilterAlgorithmMaxCount(handle_[0], &requestedAlgoCount));
+		std::vector<cudnnConvolutionBwdFilterAlgoPerf_t> results_bwd_filter(requestedAlgoCount);
+		CUDNN_CHECK(cudnnGetConvolutionBackwardFilterAlgorithm_v7(handle_[0],
+									  bottom_descs_[i],
+									  top_descs_[i],
+									  conv_descs_[i],
+									  filter_desc_,
+									  requestedAlgoCount,
+									  &returnedAlgoCount,
+									  &results_bwd_filter[0]));
+		CAFFE1_CUDA_CHECK(cudaMemGetInfo(&free_memory, &total_memory));
+		found_conv_algorithm = false;
+		for (int j=0;j<returnedAlgoCount;j++)
+		  {
+		    if (results_bwd_filter[j].status == CUDNN_STATUS_SUCCESS &&
+			results_bwd_filter[j].algo != CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD_NONFUSED &&
+			results_bwd_filter[j].memory < free_memory)
+		      {
+			found_conv_algorithm = true;
+			bwd_filter_algo_[i] = results_bwd_filter[j].algo;
+			workspace_bwd_filter_sizes_[i] = results_bwd_filter[j].memory;
+			break;
+		      }
+		  }
+		if (!found_conv_algorithm)
+		  {
+		    cudnnStatus_t cstatus = CUDNN_STATUS_NOT_INITIALIZED;
+		    LOG(INFO) << "could not find proper cudnn conv algorithm";
+		    CUDNN_CHECK(cstatus);
+		  }
+#else
                 CUDNN_CHECK(cudnnGetConvolutionBackwardFilterAlgorithm(
-                                  handle_[0],
+								       handle_[0],
                                   bottom_descs_[i], top_descs_[i], conv_descs_[i], filter_desc_,
                                   CUDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT,
                                   workspace_limit_bytes, &bwd_filter_algo_[i]) );
-
+		
                 // get workspace for backwards filter algorithm
                 CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(handle_[0],
                                   bottom_descs_[i], top_descs_[i], conv_descs_[i], filter_desc_,
                                   bwd_filter_algo_[i], &workspace_bwd_filter_sizes_[i]));
-
+#endif
+		
                 if (workspace_bwd_filter_sizes_[i] > workspaceSizeInBytes)
                   workspaceSizeInBytes = workspace_bwd_filter_sizes_[i];
 
 
                 // choose backward algo for data
+#if CUDNN_VERSION_MIN(8,0,0)
+		requestedAlgoCount = 0;
+		returnedAlgoCount = 0;
+		CUDNN_CHECK(cudnnGetConvolutionBackwardDataAlgorithmMaxCount(handle_[0], &requestedAlgoCount));
+		std::vector<cudnnConvolutionBwdDataAlgoPerf_t> results_bwd_data(requestedAlgoCount);
+		CUDNN_CHECK(cudnnGetConvolutionBackwardDataAlgorithm_v7(handle_[0],
+									filter_desc_,
+									top_descs_[i],
+									conv_descs_[i],
+									bottom_descs_[i],
+									requestedAlgoCount,
+									&returnedAlgoCount,
+									&results_bwd_data[0]));
+		
+		CAFFE1_CUDA_CHECK(cudaMemGetInfo(&free_memory, &total_memory));
+		found_conv_algorithm = false;
+		for (int j=0;j<returnedAlgoCount;j++)
+		  {
+		    if (results_bwd_data[j].status == CUDNN_STATUS_SUCCESS &&
+			results_bwd_data[j].algo != CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD_NONFUSED &&
+			results_bwd_data[j].memory < free_memory)
+		      {
+			found_conv_algorithm = true;
+			bwd_data_algo_[i] = results_bwd_data[j].algo;
+			workspace_bwd_data_sizes_[i] = results_bwd_data[j].memory;
+			break;
+		      }
+		  }
+	    if (!found_conv_algorithm)
+	      {
+		cudnnStatus_t cstatus = CUDNN_STATUS_NOT_INITIALIZED;
+		LOG(INFO) << "could not find proper cudnn conv algorithm";
+		CUDNN_CHECK(cstatus);
+	      }
+#else
                 CUDNN_CHECK(cudnnGetConvolutionBackwardDataAlgorithm(handle_[0],
-                                  filter_desc_, top_descs_[i], conv_descs_[i], bottom_descs_[i],
-                                  CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
-                                  workspace_limit_bytes, &bwd_data_algo_[i]));
-
+								     filter_desc_, top_descs_[i], conv_descs_[i], bottom_descs_[i],
+								     CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
+								     workspace_limit_bytes, &bwd_data_algo_[i]));
+		
                 // get workspace size
                 CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(handle_[0],
                                   filter_desc_, top_descs_[i], conv_descs_[i], bottom_descs_[i],
                                   bwd_data_algo_[i], &workspace_bwd_data_sizes_[i]) );
-
+#endif
                 if (workspace_bwd_data_sizes_[i] > workspaceSizeInBytes)
                   workspaceSizeInBytes = workspace_bwd_data_sizes_[i];
                 cudaFree(workspaceData);
@@ -363,6 +481,9 @@ namespace caffe {
                                       1, this->num_output_, 1, 1);
 #endif
     }
+
+    // cudnn algo is set.
+    algo_set_ = true;
   }
 
 
