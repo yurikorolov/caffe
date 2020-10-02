@@ -127,6 +127,11 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
       << "CuDNNDeconvolutionLayer input must have 2 spatial axes "
       << "(e.g., height and width). "
       << "Use 'engine: CAFFE' for general ND convolution.";
+
+  // We don't look for best cudnn algorithm if already set.
+    if (algo_set_)
+      return;
+
 #if CUDNN_VERSION_MIN(7,0,0)
   if (multiple_handles_)
     {
@@ -184,6 +189,8 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                          stride_w);
 
         // choose forward and backward algorithms + workspace(s)
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
         CUDNN_CHECK(cudnnGetConvolutionForwardAlgorithm(
                                                         handle_[0],
                                                         top_descs_[i],
@@ -224,8 +231,10 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                                             bottom_descs_[i],
                                                             fwd_algo_[i],
                                                             &(workspace_fwd_sizes_[i])));
-
+#endif
         // choose backward algorithm for filter
+#if CUDNN_VERSION_MIN(8,0,0)
+#else	
         CUDNN_CHECK(cudnnGetConvolutionBackwardFilterAlgorithm(
                                                                handle_[0],
                                                                top_descs_[i],
@@ -235,7 +244,7 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                                                CUDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT,
                                                                workspace_limit_bytes,
                                                                &bwd_filter_algo_[i]));
-
+	
         // get workspace for backwards filter algorithm
         CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(
                                                                    handle_[0],
@@ -245,8 +254,11 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                                                    filter_desc_,
                                                                    bwd_filter_algo_[i],
                                                                    &workspace_bwd_filter_sizes_[i]));
+#endif
 
         // choose backward algo for data
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
         CUDNN_CHECK(cudnnGetConvolutionBackwardDataAlgorithm(
                                                              handle_[0],
                                                              filter_desc_,
@@ -256,7 +268,7 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                                              CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
                                                              workspace_limit_bytes,
                                                              &bwd_data_algo_[i]));
-
+	
         // get workspace size
         CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(
                                                                  handle_[0],
@@ -266,6 +278,7 @@ void CuDNNDeconvolutionLayer<Dtype>::Reshape(
                                                                  top_descs_[i],
                                                                  bwd_data_algo_[i],
                                                                  &workspace_bwd_data_sizes_[i]));
+#endif
 
         // reduce over all workspace sizes to get a maximum to allocate / reallocate
         size_t total_workspace_fwd = 0;

@@ -33,9 +33,12 @@ class CuDNNDeconvolutionLayer : public DeconvolutionLayer<Dtype> {
         multiple_handles_ = false;
         min_memory_ = false;
         break;
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
       case ConvolutionParameter::MULTIPLE_HANDLES:
         multiple_handles_ = true;
         break;
+#endif
       case ConvolutionParameter::MIN_MEMORY:
         multiple_handles_ = false;
         min_memory_ = true;
@@ -74,7 +77,8 @@ class CuDNNDeconvolutionLayer : public DeconvolutionLayer<Dtype> {
   std::vector<cudnnConvolutionBwdFilterAlgoPerf_t> bwdFilterPerf_;
   std::vector<cudnnConvolutionBwdDataAlgoPerf_t> bwdDataPerf_;
 #endif
-
+  bool algo_set_ = false;
+  
   vector<cudnnTensorDescriptor_t> bottom_descs_, top_descs_;
   cudnnTensorDescriptor_t bias_desc_;
   cudnnFilterDescriptor_t filter_desc_;

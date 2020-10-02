@@ -38,10 +38,13 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
         multiple_handles_ = false;
         min_memory_ = false;
         break;
+#if CUDNN_VERSION_MIN(8,0,0)
+#else
       case ConvolutionParameter::MULTIPLE_HANDLES:
         multiple_handles_ = true;
         min_memory_ = false;
         break;
+#endif
       case ConvolutionParameter::MIN_MEMORY:
         multiple_handles_ = false;
         min_memory_ = true;
@@ -71,7 +74,8 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   cudnnConvolutionFwdAlgo_t *fwd_algo_;
   cudnnConvolutionBwdFilterAlgo_t *bwd_filter_algo_;
   cudnnConvolutionBwdDataAlgo_t *bwd_data_algo_;
-
+  bool algo_set_ = false;
+  
   bool multiple_handles_;
   bool min_memory_;
 
