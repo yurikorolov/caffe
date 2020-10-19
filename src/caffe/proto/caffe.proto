@@ -371,9 +371,11 @@ message SolverParameter {
   // long-term memory of past gradients
   optional bool amsgrad = 45 [default = false];
   // rectified adam : "auto warmup"
-  optional bool rectified = 46 [default = false];
+  optional bool rectified = 46 [default = true];
   // gradient centralization : https://arxiv.org/abs/2004.01461v2
   optional bool gc = 57 [default = false];
+  // adabelief https://arxiv.org/abs/2010.07468
+  optional bool adabelief = 47 [default = false];
 
   // RMSProp decay value
   // MeanSquare(t) = rms_decay*MeanSquare(t-1) + (1-rms_decay)*SquareGradient(t)

@@ -23,7 +23,7 @@ void AdamSolver<Dtype>::AdamPreSolve() {
 template <typename Dtype>
 void adam_update_gpu(int N, int t, Dtype* g, Dtype* m, Dtype* v, const Dtype* param, Dtype beta1,
                      Dtype beta2, Dtype eps_hat, Dtype corrected_local_rate, Dtype nu, Dtype lambda,
-                     bool amsgrad, bool decoupled_wd, bool rectified, bool gc, Dtype mean);
+                     bool amsgrad, bool decoupled_wd, bool rectified, bool gc, Dtype mean, bool adabelief);
 #endif
 
 template <typename Dtype>
@@ -36,6 +36,7 @@ void AdamSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
   const bool amsgrad = this->param_.amsgrad();
   const bool rectified = this->param_.rectified();
   const bool gc = this->param_.gc();
+  const bool adabelief = this->param_.adabelief();
 
   // we create aliases for convenience
   size_t update_history_offset = net_params.size();
@@ -64,11 +65,19 @@ void AdamSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
         net_params[param_id]->cpu_diff(), beta1,
         val_m->mutable_cpu_data());
 
+    if (adabelief)
+      {
+        caffe_sub(N,
+                  net_params[param_id]->cpu_diff(),
+                  val_m->cpu_data(),
+                  net_params[param_id]->mutable_cpu_diff());
+      }
+
     // update v <- \beta_2 m_{t-1} + (1-\beta_2)g_t^2
     caffe_mul(N,
-        net_params[param_id]->cpu_diff(),
-        net_params[param_id]->cpu_diff(),
-    val_t->mutable_cpu_data());
+              net_params[param_id]->cpu_diff(),
+              net_params[param_id]->cpu_diff(),
+              val_t->mutable_cpu_data());
 
     if (amsgrad)
       for (int k=0;k<N;k++)
@@ -162,7 +171,7 @@ void AdamSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
                     val_m->mutable_gpu_data(), val_v->mutable_gpu_data(),
                     net_params[param_id]->gpu_data(), beta1, beta2,
                     eps_hat, local_rate * correction,  lambda, nu,
-                    amsgrad, this->param_.regularization_type() == "decoupled", rectified, gc,mean);
+                    amsgrad, this->param_.regularization_type() == "decoupled", rectified, gc,mean, adabelief);
 #else
     NO_GPU;
 #endif
