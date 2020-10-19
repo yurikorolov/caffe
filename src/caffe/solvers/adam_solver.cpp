@@ -23,7 +23,7 @@ void AdamSolver<Dtype>::AdamPreSolve() {
 template <typename Dtype>
 void adam_update_gpu(int N, int t, Dtype* g, Dtype* m, Dtype* v, const Dtype* param, Dtype beta1,
                      Dtype beta2, Dtype eps_hat, Dtype corrected_local_rate, Dtype nu, Dtype lambda,
-                     bool amsgrad, bool decoupled_wd, bool rectified);
+                     bool amsgrad, bool decoupled_wd, bool rectified, bool gc, Dtype mean);
 #endif
 
 template <typename Dtype>
@@ -35,6 +35,7 @@ void AdamSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
   const Dtype beta2 = this->param_.momentum2();
   const bool amsgrad = this->param_.amsgrad();
   const bool rectified = this->param_.rectified();
+  const bool gc = this->param_.gc();
 
   // we create aliases for convenience
   size_t update_history_offset = net_params.size();
@@ -51,6 +52,13 @@ void AdamSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
 
   switch (Caffe::mode()) {
     case Caffe::CPU: {
+      if (gc)
+        {
+          std::vector<Dtype> mean_er(N,(Dtype)1.0/(Dtype)N);
+          Dtype mean = caffe_cpu_dot(N,net_params[param_id]->cpu_diff(), mean_er.data());
+          caffe_add_scalar(N, (Dtype)1.0-(Dtype)mean, net_params[param_id]->mutable_cpu_diff());
+        }
+
     // update m <- \beta_1 m_{t-1} + (1-\beta_1)g_t
     caffe_cpu_axpby(N, Dtype(1)-beta1,
         net_params[param_id]->cpu_diff(), beta1,
@@ -136,16 +144,25 @@ void AdamSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
 #ifndef CPU_ONLY
     Dtype lambda = 0.0;
     Dtype nu = 0.0;
+    Dtype mean = 0.0;
     if (this->param_.regularization_type() == "decoupled")
       {
         lambda = this->param_.weight_decay() * this->net_->params_weight_decay()[param_id];
         nu = this->decoupledWeightDecayScheduleMutiplier(t);
       }
+    if (gc)
+      {
+        Dtype *meaner;
+        cudaMalloc(&meaner, N*sizeof(Dtype));
+        std::vector<Dtype> dmeaner(N,Dtype(1.0)/Dtype(N));
+        cudaMemcpy(meaner, dmeaner.data(), N*sizeof(Dtype), cudaMemcpyHostToDevice);
+        caffe_gpu_dot(N, net_params[param_id]->gpu_diff(), meaner, &mean);
+      }
     adam_update_gpu(N, t, net_params[param_id]->mutable_gpu_diff(),
                     val_m->mutable_gpu_data(), val_v->mutable_gpu_data(),
                     net_params[param_id]->gpu_data(), beta1, beta2,
                     eps_hat, local_rate * correction,  lambda, nu,
-                    amsgrad, this->param_.regularization_type() == "decoupled", rectified);
+                    amsgrad, this->param_.regularization_type() == "decoupled", rectified, gc,mean);
 #else
     NO_GPU;
 #endif

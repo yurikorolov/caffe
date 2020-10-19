@@ -372,6 +372,8 @@ message SolverParameter {
   optional bool amsgrad = 45 [default = false];
   // rectified adam : "auto warmup"
   optional bool rectified = 46 [default = false];
+  // gradient centralization : https://arxiv.org/abs/2004.01461v2
+  optional bool gc = 57 [default = false];
 
   // RMSProp decay value
   // MeanSquare(t) = rms_decay*MeanSquare(t-1) + (1-rms_decay)*SquareGradient(t)
