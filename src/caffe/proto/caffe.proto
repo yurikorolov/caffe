@@ -1078,7 +1078,7 @@ message ConvolutionParameter {
     MULTIPLE_HANDLES = 1;
     MIN_MEMORY = 2;
   }
-  optional CudnnFlavor cudnn_flavor = 19 [default = MULTIPLE_HANDLES];
+  optional CudnnFlavor cudnn_flavor = 19 [default = MIN_MEMORY];
 }
 
 message CropParameter {

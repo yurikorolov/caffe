@@ -436,11 +436,11 @@ LIBRARY_DIRS += $(BLAS_LIB)
 LIBRARY_DIRS += $(LIB_BUILD_DIR)
 
 # Automatic dependency generation (nvcc is handled separately)
-CXXFLAGS += -MMD -MP -std=c++11
+CXXFLAGS += -MMD -MP -std=c++14
 
 # Complete build flags.
 #COMMON_FLAGS += $(foreach includedir,$(INCLUDE_DIRS),-isystem $(includedir))
-COMMON_FLAGS += $(foreach includedir,$(INCLUDE_DIRS),-I$(includedir)) -std=c++11
+COMMON_FLAGS += $(foreach includedir,$(INCLUDE_DIRS),-I$(includedir)) -std=c++14
 CXXFLAGS += -pthread -fPIC $(COMMON_FLAGS) $(WARNINGS) -fopenmp
 NVCCFLAGS += -D_FORCE_INLINES -ccbin=$(CXX) -Xcompiler -fPIC -Xcompiler -fopenmp $(COMMON_FLAGS)
 # mex may invoke an older gcc that is too liberal with -Wuninitalized
