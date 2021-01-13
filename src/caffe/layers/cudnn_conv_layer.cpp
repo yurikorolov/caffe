@@ -108,15 +108,17 @@ namespace caffe {
 
   template <typename Dtype>
   void CuDNNConvolutionLayer<Dtype>::Reshape(
-                                             const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {    
+                                             const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+    int old_num = this->num_;
     ConvolutionLayer<Dtype>::Reshape(bottom, top);
     CHECK_EQ(2, this->num_spatial_axes_)
       << "CuDNNConvolution input must have 2 spatial axes "
       << "(e.g., height and width). "
       << "Use 'engine: CAFFE' for general ND convolution.";
 
-    // We don't look for best cudnn algorithm if already set.
-    if (algo_set_)
+    // We don't look for best cudnn algorithm if already set
+    // and batch size did not change (other dims should never change).
+    if (algo_set_ && old_num == this->num_)
       return;
 
 #if CUDNN_VERSION_MIN(7,0,0)
