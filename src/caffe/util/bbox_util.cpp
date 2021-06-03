@@ -304,7 +304,7 @@ void RotateBBox(const int rangle, const NormalizedBBox& bbox, NormalizedBBox* rb
       rbbox->set_xmax(bbox.xmax());
       rbbox->set_ymax(bbox.ymax());
     }
-  else if (rangle == 1) // 90
+  else if (rangle == 3) // 270
     {
       rbbox->set_xmin(bbox.ymin());
       rbbox->set_ymin(height-bbox.xmax());
@@ -318,7 +318,7 @@ void RotateBBox(const int rangle, const NormalizedBBox& bbox, NormalizedBBox* rb
       rbbox->set_xmax(width-bbox.xmin());
       rbbox->set_ymax(height-bbox.ymin());
     }
-  else if (rangle == 3) // 270
+  else if (rangle == 1) // 90
     {
       rbbox->set_xmin(height-bbox.ymax());
       rbbox->set_ymin(bbox.xmin());
